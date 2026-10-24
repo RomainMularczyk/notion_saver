@@ -1,7 +1,6 @@
 package services
 
 import (
-	"fmt"
 	"log/slog"
 	saverModels "notion_saver/src/models/saver"
 	"notion_saver/src/repositories"
@@ -33,6 +32,6 @@ func (p *PageService) SaveMany(
 	if err != nil {
 		return nil, err
 	}
-	p.logger.Debug(fmt.Sprintf("%v pages saved successfully.", len(*savedPages)))
+	p.logger.Debug("Pages saved successfully.", slog.Int("Number of pages", len(*savedPages)))
 	return savedPages, nil
 }
