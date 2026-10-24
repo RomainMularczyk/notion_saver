@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log/slog"
+	"net/http"
 	"notion_saver/src/routes"
 	"notion_saver/src/utils"
 	blocksWorker "notion_saver/src/workers/blocks"
@@ -23,6 +25,7 @@ func main() {
 	// Load environment variables
 	env := utils.LoadEnv()
 
+	// Start OTel collecting
 	traceProvider := utils.NewTracerProvider(ctx, env)
 	otel.SetTracerProvider(traceProvider)
 	otel.SetTextMapPropagator(
@@ -35,7 +38,7 @@ func main() {
 	logger := utils.NewLogger(ctx)
 	slog.SetDefault(logger)
 
-	// Create the server
+	// Create the server representation
 	server := utils.Server{
 		Logger:  logger,
 		Env:     env,
@@ -45,6 +48,7 @@ func main() {
 	server.ConnectDatabase()
 	server.ConnectQueue()
 
+	// Start the workers
 	saveWorker := savesWorker.NewSaveWorker(&server)
 	go saveWorker.Run(&server)
 
@@ -56,5 +60,16 @@ func main() {
 
 	engine := gin.Default()
 	routes.Router(&server, engine)
-	engine.Run(":8080")
+
+	// Launch the web server
+	httpServer := &http.Server{Addr: ":8080", Handler: engine}
+	go func() {
+		if err := httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			slog.Error("HTTP server failed to start", slog.String("error", err.Error()))
+			stop()
+		}
+	}()
+
+	<-ctx.Done()
+	stop()
 }
