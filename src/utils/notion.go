@@ -9,7 +9,6 @@ import (
 	notionModels "notion_saver/src/models/notion"
 
 	"github.com/google/uuid"
-	"github.com/joho/godotenv"
 )
 
 type NotionFilterType string
@@ -58,11 +57,11 @@ func NewNotion(server *Server) *Notion {
 // Set the headers conforming to the Notion API requirements
 // for more information, refer to https://developers.notion.com/reference/intro
 func (n *Notion) setHeaders(request *http.Request) {
-	if err := godotenv.Load(".env"); err != nil {
-		errMsg := fmt.Sprintf("Could not find NOTION_API_BEARER_TOKEN environment variable.")
-		n.logger.Error(errMsg)
+	errMsg := fmt.Sprintf("Could not find NOTION_API_KEY environment variable.")
+	if n.server.Env["NOTION_API_KEY"] == "" {
 		panic(errMsg)
 	}
+
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("Notion-Version", n.HeaderVersion)
 	request.Header.Set(
@@ -77,16 +76,14 @@ func (n *Notion) filterPages(
 	nextCursor *string,
 ) []byte {
 	if !pageType.Valid() {
-		errMsg := fmt.Sprintf(
-			"Notion API: Invalid filter type. Should be either 'page' or 'database'. Received: %v", pageType,
-		)
-		n.logger.Error(errMsg)
+		errMsg := "Notion API: Invalid filter type. Should be either 'page' or 'database'."
+		n.logger.Error(errMsg, slog.String("Page type", string(pageType)))
 		panic(errMsg)
 	}
 
 	var filter map[string]any
 
-	// This is the way we should build Notion API body filters
+	// NOTE: This is the way we should build Notion API body filters
 	// for more information, refer to https://developers.notion.com/reference/post-search
 	if nextCursor != nil {
 		n.logger.Debug("NextCursor is defined", slog.String("nextCursor", *nextCursor))
@@ -109,8 +106,8 @@ func (n *Notion) filterPages(
 
 	body, err := json.Marshal(filter)
 	if err != nil {
-		errMsg := fmt.Sprintf("Error when marshalling JSON: %v", err)
-		n.logger.Error(errMsg)
+		errMsg := "Error when marshalling JSON."
+		n.logger.Error(errMsg, slog.String("error", err.Error()))
 		panic(errMsg)
 	}
 
@@ -129,13 +126,54 @@ func (n *Notion) setRequest(
 		bytes.NewBuffer(body),
 	)
 	if err != nil {
-		n.logger.Error(fmt.Sprintf("Error when creating a request: %v", err))
+		n.logger.Error(
+			"Error when creating the request.",
+			slog.String("error", err.Error()),
+		)
 		return nil, err
 	}
 
 	n.setHeaders(request)
 
 	return request, nil
+}
+
+// Send the HTTP request to Notion API
+func (n *Notion) sendRequest(request *http.Request) (*http.Response, error) {
+	client := &http.Client{}
+	n.logger.Debug(
+		"Sending request to Notion API.",
+		slog.String("URL", request.URL.String()),
+	)
+	response, err := client.Do(request)
+	n.logger.Debug(
+		"Notion API response.",
+		slog.Int("Status Code", response.StatusCode),
+	)
+
+	if err != nil {
+		n.logger.Error(
+			"Error when sending the POST request.",
+			slog.String("error", err.Error()),
+			slog.String("URL", request.URL.String()),
+		)
+		return nil, err
+	}
+	notionErr := n.filterAPIError(response)
+	if notionErr != nil {
+		n.logger.Error(
+			"Error response returned by Notion API.",
+			slog.Int("HTTP Status Code", notionErr.Code),
+			slog.Bool("Rate limited", notionErr.IsRateLimited),
+			slog.Bool("Client error", notionErr.IsClientError),
+			slog.Bool("Server error", notionErr.IsServerError),
+			slog.Bool("Response malformed", notionErr.IsMalformed),
+		)
+		return nil, notionErr
+	}
+
+	defer response.Body.Close()
+	return response, nil
 }
 
 // Search Notion pages by type (either 'page' or 'database')
@@ -149,29 +187,21 @@ func (n *Notion) SearchPages(
 		n.filterPages(pageType, nextCursor),
 	)
 	if err != nil {
-		n.logger.Error(fmt.Sprintf("Error when creating a request: %v", err))
-		return nil, err
-	}
-
-	client := &http.Client{}
-	response, err := client.Do(request)
-
-	if err != nil {
 		n.logger.Error(
-			fmt.Sprintf("Error when sending the POST request: %v", err),
-			slog.String("URL", request.URL.String()),
+			"Error when creating a request.",
+			slog.String("error", err.Error()),
 		)
 		return nil, err
 	}
 
-	defer response.Body.Close()
+	response, err := n.sendRequest(request)
 	var notionPages notionModels.NotionPages
 
 	err = json.NewDecoder(response.Body).Decode(&notionPages)
-
 	if err != nil {
 		n.logger.Error(
-			fmt.Sprintf("Error when unmarshalling Notion Pages: %v", err),
+			"Error when unmarshalling Notion Pages.",
+			slog.String("error", err.Error()),
 			slog.String("URL", request.URL.String()),
 		)
 		return nil, err
@@ -203,39 +233,21 @@ func (n *Notion) GetPageBlocks(
 		)
 	}
 	if err != nil {
-		n.logger.Error(fmt.Sprintf("Error when creating a request: %v", err))
-		return nil, err
-	}
-
-	client := &http.Client{}
-	n.logger.Debug(
-		"Sending request to Notion API.",
-		slog.String("URL", request.URL.String()),
-	)
-	response, err := client.Do(request)
-	n.logger.Debug(
-		"Notion API response.",
-		slog.Int("Status Code", response.StatusCode),
-	)
-	if err != nil {
 		n.logger.Error(
-			fmt.Sprintf("Error when sending the POST request: %v", err),
-			slog.String("URL", request.URL.String()),
+			"Error when creating a request.",
+			slog.String("error", err.Error()),
 		)
 		return nil, err
 	}
-	notionErr := n.filterAPIError(response)
-	if notionErr != nil {
-		return nil, notionErr
-	}
 
-	defer response.Body.Close()
+	response, err := n.sendRequest(request)
 	var blocks notionModels.NotionBlocks
 
 	err = json.NewDecoder(response.Body).Decode(&blocks)
 	if err != nil {
 		n.logger.Error(
-			fmt.Sprintf("Error when unmarshalling Notion Blocks: %v", err),
+			"Error when unmarshalling Notion Blocks.",
+			slog.String("error", err.Error()),
 			slog.String("URL", request.URL.String()),
 		)
 		return nil, &NotionError{
