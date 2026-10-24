@@ -5,7 +5,7 @@
             "Group": "Servers",
             "Host": "postgres",
             "Port": 5432,
-            "DBName": "notion_saver_main_database",
+            "MaintenanceDB": "notion_saver_main_database",
             "Username": "notion_saver_database_admin",
             "SSLMode": "prefer",
             "PassFile": ".pgpass"
