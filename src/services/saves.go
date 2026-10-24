@@ -28,6 +28,7 @@ func NewSaveService(server *utils.Server) *SaveService {
 // 2. Debezium will emit a message to the RabbitMQ queue so the worker
 // can start crawling the Notion API
 func (s *SaveService) New(server *utils.Server) (*saverModels.Save, error) {
+	server.Logger.InfoContext(server.Context, "Create a new save.")
 	newSaveId := uuid.New()
 	save := saverModels.Save{
 		Id:       newSaveId,
@@ -39,6 +40,11 @@ func (s *SaveService) New(server *utils.Server) (*saverModels.Save, error) {
 	if err != nil {
 		return nil, err
 	}
+	server.Logger.InfoContext(
+		server.Context,
+		"New save created.",
+		slog.String("id", newSave.Id.String()),
+	)
 
 	return newSave, nil
 }
