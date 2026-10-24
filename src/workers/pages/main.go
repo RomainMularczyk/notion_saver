@@ -3,6 +3,7 @@ package pagesWorker
 import (
 	"notion_saver/src/services"
 	"notion_saver/src/utils"
+	blocksWorkerModels "notion_saver/src/workers/blocks/models"
 	sharedWorker "notion_saver/src/workers/shared"
 )
 
@@ -59,6 +60,16 @@ func (w *PageWorker) Run(server *utils.Server) {
 				pageService := services.NewPageService(w.server)
 				pageService.SaveMany(w.server, notionPages, pageMsg.SaveId)
 				w.logger.Info("Message was successfully processed")
+
+				for _ = range notionPages {
+					blockMsg := blocksWorkerModels.BlockMessage{
+						NextCursor:      nil,
+						PageId:          pageMsg.SaveId,
+						PaginationIndex: pageMsg.PaginationIndex + 1,
+					}
+					w.PublishBlockMessage(ch, blockMsg)
+				}
+
 				sharedWorker.GetNextPages(ch, pageMsg, w.server)
 			}
 		}

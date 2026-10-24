@@ -4,8 +4,10 @@ import (
 	"encoding/json"
 	"notion_saver/src/utils"
 
-	amqp "github.com/rabbitmq/amqp091-go"
+	blocksWorkerModels "notion_saver/src/workers/blocks/models"
 	sharedWorker "notion_saver/src/workers/shared"
+
+	amqp "github.com/rabbitmq/amqp091-go"
 )
 
 // Reads and parses a NotionPage message representing a page retrieved
@@ -23,4 +25,26 @@ func (w *PageWorker) ReadNotionPagesMessage(
 
 	w.logger.Info("Message was parsed successfully.")
 	return &notionPagesMessage, nil
+}
+
+func (w *PageWorker) PublishBlockMessage(
+	ch *amqp.Channel,
+	blockMessage blocksWorkerModels.BlockMessage,
+) {
+	w.logger.Info("Publishing block message")
+	messageBytes, err := json.Marshal(blockMessage)
+	if err != nil {
+		w.logger.Error("Error when marshalling JSON")
+	}
+
+	ch.Publish(
+		"notion.blocks",
+		"notion.blocks",
+		false, // mandatory
+		false, // immediate
+		amqp.Publishing{
+			ContentType: "application/json",
+			Body:        messageBytes,
+		},
+	)
 }
