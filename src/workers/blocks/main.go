@@ -2,7 +2,6 @@ package blocksWorker
 
 import (
 	"encoding/json"
-	"fmt"
 	"log/slog"
 	"notion_saver/src/services"
 	"notion_saver/src/utils"
@@ -47,16 +46,30 @@ func (b *BlockWorker) Run(server *utils.Server) {
 			var blockMessage blocksWorkerModels.BlockMessage
 			err := json.Unmarshal(d.Body, &blockMessage)
 			if err != nil {
-				b.logger.Error(fmt.Sprintf("Error when unmarshalling block message: %v", err))
+				b.logger.Error(
+					"Error when unmarshalling block message.",
+					slog.String("error", err.Error()),
+				)
 				ch.Nack(d.DeliveryTag, false, true)
 				continue
 			}
 
 			// Publish the next cursor message in the queue
 			newBlocks, err := b.GetNotionBlocks(ch, blockMessage)
+			notion := utils.NewNotion(b.server)
+
 			if err != nil {
-				b.logger.Error(fmt.Sprintf("Error when retrieving blocks from Notion API: %v", err))
-				ch.Nack(d.DeliveryTag, false, true)
+				notionError := notion.IsNotionError(err)
+				if notionError.IsRateLimited {
+					b.logger.Error(
+						"Error when retrieving blocks from Notion API.",
+						slog.String("error", err.Error()),
+						slog.Bool("rate_limited", notionError.IsRateLimited),
+						slog.Bool("client_error", notionError.IsClientError),
+					)
+					b.SendBlockMessageToDql(ch, blockMessage)
+				}
+				ch.Nack(d.DeliveryTag, false, false)
 				continue
 			}
 

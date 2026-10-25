@@ -62,7 +62,7 @@ func (w *SaveWorker) Run(server *utils.Server) {
 				}
 				saveService := services.NewPageService(w.server)
 				saveService.SaveMany(w.server, notionPages, saveMsg.Payload.After.Id)
-				w.logger.Info("Message was successfully processed")
+				w.logger.Info("Message was successfully processed.")
 				d.Ack(true)
 			}
 		}

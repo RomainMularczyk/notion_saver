@@ -3,7 +3,7 @@ package blocksWorker
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
+	"log/slog"
 	saverModels "notion_saver/src/models/saver"
 	"notion_saver/src/utils"
 	blocksWorkerModels "notion_saver/src/workers/blocks/models"
@@ -30,7 +30,9 @@ func (b *BlockWorker) GetNotionBlocks(
 
 	if err != nil {
 		b.logger.Error(
-			fmt.Sprintf("Error when retrieving blocks from Notion API: %v", err),
+			"Error when retrieving blocks from Notion API.",
+			slog.String("error", err.Error()),
+			slog.String("PageId", blockMessage.PageId.String()),
 		)
 		return nil, err
 	}
@@ -55,17 +57,42 @@ func (b *BlockWorker) publishNextCursorMessage(
 	blockMessage blocksWorkerModels.BlockMessage,
 ) {
 	b.logger.Info(
-		fmt.Sprintf("Publishing next cursor message: %v", utils.ToJson(blockMessage)),
+		"Publishing next cursor message.",
+		slog.String("page_id", blockMessage.PageId.String()),
 	)
 	messageBytes, err := json.Marshal(blockMessage)
 	if err != nil {
-		b.logger.Error(fmt.Sprintf("Error when marshalling JSON: %v", err))
+		b.logger.Error("Error when marshalling JSON.")
 		return
 	}
 
 	ch.Publish(
 		"notion.blocks",
 		"notion.blocks",
+		false, // mandatory
+		false, // immediate
+		amqp.Publishing{
+			ContentType: "application/json",
+			Body:        messageBytes,
+		},
+	)
+}
+
+// Publish the block message in the DLQ
+func (b *BlockWorker) SendBlockMessageToDql(
+	ch *amqp.Channel,
+	blockMessage blocksWorkerModels.BlockMessage,
+) {
+	b.logger.Info("Sending block message to DQL.")
+	messageBytes, err := json.Marshal(blockMessage)
+	if err != nil {
+		b.logger.Error("Error when marshalling JSON.")
+		return
+	}
+
+	ch.Publish(
+		"notion.blocks.dlq",
+		"notion.blocks.dlq",
 		false, // mandatory
 		false, // immediate
 		amqp.Publishing{

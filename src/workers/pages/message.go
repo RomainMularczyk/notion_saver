@@ -2,6 +2,7 @@ package pagesWorker
 
 import (
 	"encoding/json"
+	"log/slog"
 	"notion_saver/src/utils"
 
 	blocksWorkerModels "notion_saver/src/workers/blocks/models"
@@ -31,15 +32,45 @@ func (w *PageWorker) PublishBlockMessage(
 	ch *amqp.Channel,
 	blockMessage blocksWorkerModels.BlockMessage,
 ) {
-	w.logger.Info("Publishing block message")
+	w.logger.Info(
+		"Publishing block message.",
+		slog.String("page_id", blockMessage.PageId.String()),
+	)
 	messageBytes, err := json.Marshal(blockMessage)
 	if err != nil {
-		w.logger.Error("Error when marshalling JSON")
+		w.logger.Error("Error when marshalling JSON.")
 	}
 
 	ch.Publish(
 		"notion.blocks",
 		"notion.blocks",
+		false, // mandatory
+		false, // immediate
+		amqp.Publishing{
+			ContentType: "application/json",
+			Body:        messageBytes,
+		},
+	)
+}
+
+// Publish the page message in the DLQ
+func (w *PageWorker) SendPageMessageToDlq(
+	ch *amqp.Channel,
+	pageMessage *sharedWorker.PageMessage,
+) {
+	w.logger.Info(
+		"Publishing page message to notion.pages.dlq.",
+		slog.String("page_id", pageMessage.SaveId.String()),
+	)
+	messageBytes, err := json.Marshal(pageMessage)
+	if err != nil {
+		w.logger.Error("Error when marshalling JSON.")
+		return
+	}
+
+	ch.Publish(
+		"notion.pages.dlq",
+		"notion.pages.dlq",
 		false, // mandatory
 		false, // immediate
 		amqp.Publishing{

@@ -44,6 +44,32 @@ func PublishNextCursorMessage(
 	)
 }
 
+// Publishes a message in the queue with the pages under the next cursor
+func SendPageMessageToDql(
+	ch *amqp.Channel,
+	pageMessage PageMessage,
+	server *utils.Server,
+) {
+	server.Logger.Info("Sending page message to notion.pages.dql.")
+	messageBytes, err := json.Marshal(pageMessage)
+	if err != nil {
+		server.Logger.Error("Error when marshalling JSON.")
+		return
+	}
+
+	ch.Publish(
+		"notion.pages.dql",
+		"notion.pages.dql",
+		false, // mandatory
+		false, // immediate
+		amqp.Publishing{
+			ContentType: "application/json",
+			Body:        messageBytes,
+		},
+	)
+}
+
+// Retrieve the pages on the current cursor from the Notion API
 func GetNextPages(
 	ch *amqp.Channel,
 	pageMessage *PageMessage,
@@ -55,6 +81,17 @@ func GetNextPages(
 		pageMessage.NextCursor,
 	)
 	if err != nil {
+		notionError := notion.IsNotionError(err)
+		if notionError.IsRateLimited {
+			server.Logger.Error(
+				"Error when retrieving pages from Notion API.",
+				slog.String("error", err.Error()),
+				slog.Bool("rate_limited", notionError.IsRateLimited),
+				slog.Bool("client_error", notionError.IsClientError),
+			)
+			SendPageMessageToDql(ch, *pageMessage, server)
+			return nil, err
+		}
 		return nil, err
 	}
 
