@@ -52,6 +52,7 @@ type NotionBlock struct {
 	TableRow         *NotionTableRow         `json:"table_row,omitempty"`
 	Quote            *NotionQuote            `json:"quote,omitempty"`
 	ToDo             *NotionToDo             `json:"to_do,omitempty"`
+	TableOfContents  *NotionTableOfContents  `json:"table_of_contents,omitempty"`
 }
 
 // Convert a Notion API Blocks into a NotionSaver Blocks
@@ -156,6 +157,9 @@ func (b *NotionBlock) GetFullText() string {
 	}
 	if b.Type == "bookmark" {
 		return b.bookmarkFullText()
+	}
+	if b.Type == "table_of_contents" {
+		return ""
 	}
 
 	panic(fmt.Sprintf("Type %s not supported", b.Type))
