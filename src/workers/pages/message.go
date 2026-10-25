@@ -20,7 +20,7 @@ func (w *PageWorker) ReadNotionPagesMessage(
 
 	var notionPagesMessage sharedWorker.PageMessage
 	if err := json.Unmarshal(body, &notionPagesMessage); err != nil {
-		w.logger.Error("Error when unmarshalling JSON")
+		w.logger.Error("Error when unmarshalling JSON.")
 		return nil, err
 	}
 
@@ -75,6 +75,7 @@ func (w *PageWorker) SendPageMessageToDlq(
 		false, // immediate
 		amqp.Publishing{
 			ContentType: "application/json",
+			Headers:     amqp.Table{"x-retry-count": pageMessage.RetryCount},
 			Body:        messageBytes,
 		},
 	)

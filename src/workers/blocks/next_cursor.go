@@ -2,7 +2,6 @@ package blocksWorker
 
 import (
 	"encoding/json"
-	"errors"
 	"log/slog"
 	saverModels "notion_saver/src/models/saver"
 	"notion_saver/src/utils"
@@ -23,9 +22,15 @@ func (b *BlockWorker) GetNotionBlocks(
 		blockMessage.PageId,
 		blockMessage.NextCursor,
 	)
-	var notionErr *utils.NotionError
-	if errors.As(err, &notionErr) {
-		// TODO: implement exponential backoff
+	notionError := notion.IsNotionError(err)
+	if err != nil && notionError.IsRateLimited {
+		b.logger.Error(
+			"Error when retrieving blocks from Notion API.",
+			slog.String("error", err.Error()),
+			slog.Bool("rate_limited", notionError.IsRateLimited),
+			slog.Bool("client_error", notionError.IsClientError),
+		)
+		return nil, err
 	}
 
 	if err != nil {
@@ -42,6 +47,7 @@ func (b *BlockWorker) GetNotionBlocks(
 			NextCursor:      &notionBlocks.NextCursor,
 			PageId:          blockMessage.PageId,
 			PaginationIndex: blockMessage.PaginationIndex + 1,
+			RetryCount:      0,
 		}
 		b.publishNextCursorMessage(ch, nextBlockMessage)
 	}
@@ -73,6 +79,7 @@ func (b *BlockWorker) publishNextCursorMessage(
 		false, // immediate
 		amqp.Publishing{
 			ContentType: "application/json",
+			Headers:     amqp.Table{"x-retry-count": blockMessage.RetryCount},
 			Body:        messageBytes,
 		},
 	)
@@ -97,6 +104,7 @@ func (b *BlockWorker) SendBlockMessageToDql(
 		false, // immediate
 		amqp.Publishing{
 			ContentType: "application/json",
+			Headers:     amqp.Table{"x-retry-count": blockMessage.RetryCount + 1},
 			Body:        messageBytes,
 		},
 	)

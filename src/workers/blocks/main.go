@@ -50,7 +50,7 @@ func (b *BlockWorker) Run(server *utils.Server) {
 					"Error when unmarshalling block message.",
 					slog.String("error", err.Error()),
 				)
-				ch.Nack(d.DeliveryTag, false, true)
+				ch.Nack(d.DeliveryTag, false, false)
 				continue
 			}
 
@@ -60,7 +60,7 @@ func (b *BlockWorker) Run(server *utils.Server) {
 
 			if err != nil {
 				notionError := notion.IsNotionError(err)
-				if notionError.IsRateLimited {
+				if notionError != nil && notionError.IsRateLimited {
 					b.logger.Error(
 						"Error when retrieving blocks from Notion API.",
 						slog.String("error", err.Error()),

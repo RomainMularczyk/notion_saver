@@ -57,14 +57,15 @@ func (w *PageWorker) Run(server *utils.Server) {
 				pageService.SaveMany(w.server, notionPages, pageMsg.SaveId)
 				w.logger.Info("Message was successfully processed.")
 
-				for _ = range notionPages {
+				for _, notionPage := range notionPages {
 					blockMsg := blocksWorkerModels.BlockMessage{
 						NextCursor:      nil,
-						PageId:          pageMsg.SaveId,
+						PageId:          notionPage.Id,
 						PaginationIndex: pageMsg.PaginationIndex + 1,
 					}
 					w.PublishBlockMessage(ch, blockMsg)
 				}
+				d.Ack(false)
 			}
 		}
 	}()

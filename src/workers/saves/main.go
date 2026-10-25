@@ -46,15 +46,13 @@ func (w *SaveWorker) Run(server *utils.Server) {
 				)
 				d.Nack(false, false)
 			} else {
-				notionPages, err := sharedWorker.GetNextPages(
-					ch,
-					&sharedWorker.PageMessage{
-						SaveId:          saveMsg.Payload.After.Id,
-						PaginationIndex: 0,
-						NextCursor:      nil,
-					},
-					w.server,
-				)
+				pageMessage := sharedWorker.PageMessage{
+					SaveId:          saveMsg.Payload.After.Id,
+					PaginationIndex: 0,
+					NextCursor:      nil,
+					RetryCount:      0,
+				}
+				notionPages, err := sharedWorker.GetNextPages(ch, &pageMessage, w.server)
 				if err != nil {
 					w.logger.Error("Could not save the pages retrieved from the Notion API.")
 					d.Nack(false, false)
@@ -63,7 +61,7 @@ func (w *SaveWorker) Run(server *utils.Server) {
 				saveService := services.NewPageService(w.server)
 				saveService.SaveMany(w.server, notionPages, saveMsg.Payload.After.Id)
 				w.logger.Info("Message was successfully processed.")
-				d.Ack(true)
+				d.Ack(false)
 			}
 		}
 	}()
