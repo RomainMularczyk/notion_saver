@@ -32,6 +32,9 @@ func (p *PageService) SaveMany(
 	if err != nil {
 		return nil, err
 	}
-	p.logger.Debug("Pages saved successfully.", slog.Int("Number of pages", len(*savedPages)))
+	p.logger.Debug(
+		"Pages saved successfully.",
+		slog.Int("Number of pages", len(*savedPages)),
+	)
 	return savedPages, nil
 }
