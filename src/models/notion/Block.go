@@ -30,6 +30,7 @@ type NotionBlock struct {
 	InTrash          bool                    `json:"in_trash"`
 	Type             string                  `json:"type"`
 	Paragraph        *NotionBlockParagraph   `json:"paragraph,omitempty"`
+	Bookmark         *NotionBookmark         `json:"bookmark,omitempty"`
 	BulletedListItem *NotionBulletedListItem `json:"bulleted_list_item,omitempty"`
 	NumberedListItem *NotionNumberedListItem `json:"numbered_list_item,omitempty"`
 	Heading1         *NotionHeading          `json:"heading_1,omitempty"`
@@ -137,6 +138,9 @@ func (b *NotionBlock) GetFullText() string {
 	if b.Type == "quote" {
 		return b.quoteFullText()
 	}
+	if b.Type == "bookmark" {
+		return b.bookmarkFullText()
+	}
 
 	panic(fmt.Sprintf("Type %s not supported", b.Type))
 }
@@ -176,6 +180,10 @@ func (b *NotionBlock) embedFullText() string {
 // Retrieve the full text content of a Notion link preview
 func (b *NotionBlock) linkPreviewFullText() string {
 	return b.LinkPreview.Url
+}
+
+func (b *NotionBlock) bookmarkFullText() string {
+	return b.Bookmark.Url
 }
 
 // Retrieve the full text content of a Notion equation
