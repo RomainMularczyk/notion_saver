@@ -33,6 +33,7 @@ type NotionBlock struct {
 	Bookmark         *NotionBookmark         `json:"bookmark,omitempty"`
 	BulletedListItem *NotionBulletedListItem `json:"bulleted_list_item,omitempty"`
 	NumberedListItem *NotionNumberedListItem `json:"numbered_list_item,omitempty"`
+	File             *NotionFile             `json:"file,omitempty"`
 	Heading1         *NotionHeading          `json:"heading_1,omitempty"`
 	Heading2         *NotionHeading          `json:"heading_2,omitempty"`
 	Heading3         *NotionHeading          `json:"heading_3,omitempty"`
@@ -44,11 +45,13 @@ type NotionBlock struct {
 	LinkPreview      *NotionLinkPreview      `json:"link_preview,omitempty"`
 	Equation         *NotionEquation         `json:"equation,omitempty"`
 	Embed            *NotionEmbed            `json:"embed,omitempty"`
+	Pdf              *NotionPdf              `json:"pdf,omitempty"`
 	Callout          *NotionCallout          `json:"callout,omitempty"`
 	Toggle           *NotionToggle           `json:"toggle,omitempty"`
 	Table            *NotionTable            `json:"table,omitempty"`
 	TableRow         *NotionTableRow         `json:"table_row,omitempty"`
 	Quote            *NotionQuote            `json:"quote,omitempty"`
+	ToDo             *NotionToDo             `json:"to_do,omitempty"`
 }
 
 // Convert a Notion API Blocks into a NotionSaver Blocks
@@ -126,14 +129,27 @@ func (b *NotionBlock) GetFullText() string {
 	if b.Type == "divider" {
 		return ""
 	}
+	if b.Type == "column_list" {
+		// TODO: fetch children block to retrieve column content
+		return ""
+	}
+	if b.Type == "file" {
+		return b.fileFullText()
+	}
 	if b.Type == "toggle" {
 		return b.toggleFullText()
 	}
 	if b.Type == "table" {
 		return ""
 	}
+	if b.Type == "pdf" {
+		return b.pdfFullText()
+	}
 	if b.Type == "table_row" {
 		return b.tableRowFullText()
+	}
+	if b.Type == "to_do" {
+		return b.toDoFullText()
 	}
 	if b.Type == "quote" {
 		return b.quoteFullText()
@@ -143,6 +159,21 @@ func (b *NotionBlock) GetFullText() string {
 	}
 
 	panic(fmt.Sprintf("Type %s not supported", b.Type))
+}
+
+// Retrieve the full text content of a Notion to do
+func (b *NotionBlock) toDoFullText() string {
+	return b.concatenateRichText(b.ToDo.RichText)
+}
+
+// Retrieve the full text content of a Notion pdf
+func (b *NotionBlock) pdfFullText() string {
+	return b.Pdf.External.Url
+}
+
+// Retrieve the full text content of a Notion file
+func (b *NotionBlock) fileFullText() string {
+	return b.File.External.Url
 }
 
 // Retrieve the full text content of a Notion quote
@@ -182,6 +213,7 @@ func (b *NotionBlock) linkPreviewFullText() string {
 	return b.LinkPreview.Url
 }
 
+// Retrieve the full text content of a Notion bookmark
 func (b *NotionBlock) bookmarkFullText() string {
 	return b.Bookmark.Url
 }
