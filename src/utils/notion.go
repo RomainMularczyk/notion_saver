@@ -3,6 +3,7 @@ package utils
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -172,7 +173,6 @@ func (n *Notion) sendRequest(request *http.Request) (*http.Response, error) {
 		return nil, notionErr
 	}
 
-	defer response.Body.Close()
 	return response, nil
 }
 
@@ -195,6 +195,9 @@ func (n *Notion) SearchPages(
 	}
 
 	response, err := n.sendRequest(request)
+	if err != nil {
+		return nil, err
+	}
 	var notionPages notionModels.NotionPages
 
 	err = json.NewDecoder(response.Body).Decode(&notionPages)
@@ -241,6 +244,9 @@ func (n *Notion) GetPageBlocks(
 	}
 
 	response, err := n.sendRequest(request)
+	if err != nil {
+		return nil, err
+	}
 	var blocks notionModels.NotionBlocks
 
 	err = json.NewDecoder(response.Body).Decode(&blocks)
@@ -287,6 +293,15 @@ func (n *Notion) filterAPIError(response *http.Response) *NotionError {
 			IsServerError: true,
 			Code:          response.StatusCode,
 		}
+	}
+	return nil
+}
+
+// Verify if an error is a NotionError
+func (n *Notion) IsNotionError(err error) *NotionError {
+	var notionErr *NotionError
+	if errors.As(err, &notionErr) {
+		return notionErr
 	}
 	return nil
 }
