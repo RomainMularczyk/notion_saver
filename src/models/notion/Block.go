@@ -57,7 +57,7 @@ func (b *NotionBlocks) ToSaverFormat(pageId uuid.UUID) []saverModels.Block {
 	for _, block := range b.Results {
 		payloadBytes, err := json.Marshal(block)
 		if err != nil {
-			slog.Error(fmt.Sprintf("Error marshalling block: %s", err))
+			slog.Error("Error marshalling block.", slog.String("error", err.Error()))
 			continue
 		}
 		payload := datatypes.JSON(payloadBytes)
@@ -71,7 +71,7 @@ func (b *NotionBlocks) ToSaverFormat(pageId uuid.UUID) []saverModels.Block {
 			PageId:   pageId,
 		}
 		newBlock.Hash = newBlock.ComputeHash()
-
+		slog.Info("New block created successfully.", slog.String("block_id", block.Id.String()))
 		newBlocks = append(newBlocks, newBlock)
 	}
 
@@ -89,6 +89,9 @@ func (b *NotionBlock) GetFullText() string {
 	if b.Type == "numbered_list_item" {
 		return b.numberedListItemFullText()
 	}
+	if b.Type == "video" {
+		return ""
+	}
 	if b.Type == "heading_1" || b.Type == "heading_2" || b.Type == "heading_3" || b.Type == "heading_4" {
 		return b.headingFullText()
 	}
@@ -99,6 +102,9 @@ func (b *NotionBlock) GetFullText() string {
 		return b.equationFullText()
 	}
 	if b.Type == "child_page" {
+		return ""
+	}
+	if b.Type == "link_to_page" {
 		return ""
 	}
 	if b.Type == "child_database" {
@@ -115,6 +121,9 @@ func (b *NotionBlock) GetFullText() string {
 	}
 	if b.Type == "callout" {
 		return b.calloutFullText()
+	}
+	if b.Type == "divider" {
+		return ""
 	}
 	if b.Type == "toggle" {
 		return b.toggleFullText()
