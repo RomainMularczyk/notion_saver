@@ -29,7 +29,19 @@ type NotionError struct {
 	IsRateLimited bool
 	IsClientError bool
 	IsServerError bool
+	IsTransport   bool
 	IsMalformed   bool
+}
+
+/*
+	Check whether the NotionError is retryable or not.
+
+For example, in cases of a client error (400), except rate limiting (429),
+the request is considered as not retryable and the message should be discarded
+right away.
+*/
+func (e *NotionError) IsRetryable() bool {
+	return e.IsRateLimited || e.IsServerError || e.IsTransport
 }
 
 func (e NotionError) Error() string {
@@ -50,16 +62,18 @@ func NewNotion(server *Server) *Notion {
 	return &Notion{
 		server:        server,
 		logger:        server.Logger.With("module", "utils/notion"),
-		Endpoint:      "https://api.notion.com/v1",
-		HeaderVersion: "2026-03-11",
+		Endpoint:      server.Env["NOTION_API_ENDPOINT"],
+		HeaderVersion: server.Env["NOTION_API_HEADER_VERSION"],
 	}
 }
 
 // Set the headers conforming to the Notion API requirements
 // for more information, refer to https://developers.notion.com/reference/intro
 func (n *Notion) setHeaders(request *http.Request) {
-	errMsg := fmt.Sprintf("Could not find NOTION_API_KEY environment variable.")
-	if n.server.Env["NOTION_API_KEY"] == "" {
+	errMsg := "Could not find NOTION_API_KEY environment variable."
+	if n.server.Env["NOTION_API_KEY"] == "" ||
+		n.server.Env["NOTION_API_ENDPOINT"] == "" ||
+		n.server.Env["NOTION_API_HEADER_VERSION"] == "" {
 		panic(errMsg)
 	}
 
@@ -67,7 +81,7 @@ func (n *Notion) setHeaders(request *http.Request) {
 	request.Header.Set("Notion-Version", n.HeaderVersion)
 	request.Header.Set(
 		"Authorization",
-		fmt.Sprintf("Bearer %s", n.server.Env["NOTION_API_KEY"]),
+		fmt.Sprintf("Bearer %s", n.Endpoint),
 	)
 }
 
@@ -78,7 +92,7 @@ func (n *Notion) filterPages(
 ) []byte {
 	if !pageType.Valid() {
 		errMsg := "Notion API: Invalid filter type. Should be either 'page' or 'database'."
-		n.logger.Error(errMsg, slog.String("Page type", string(pageType)))
+		n.logger.Error(errMsg, slog.String("page_type", string(pageType)))
 		panic(errMsg)
 	}
 
@@ -87,7 +101,7 @@ func (n *Notion) filterPages(
 	// NOTE: This is the way we should build Notion API body filters
 	// for more information, refer to https://developers.notion.com/reference/post-search
 	if nextCursor != nil {
-		n.logger.Debug("NextCursor is defined", slog.String("nextCursor", *nextCursor))
+		n.logger.Debug("NextCursor is defined.", slog.String("next_cursor", *nextCursor))
 		filter = map[string]any{
 			"filter": map[string]any{
 				"value":    pageType,
@@ -96,7 +110,7 @@ func (n *Notion) filterPages(
 			"start_cursor": *nextCursor,
 		}
 	} else {
-		n.logger.Debug("NextCursor is not defined")
+		n.logger.Debug("NextCursor is not defined.")
 		filter = map[string]any{
 			"filter": map[string]any{
 				"value":    pageType,
@@ -144,31 +158,31 @@ func (n *Notion) sendRequest(request *http.Request) (*http.Response, error) {
 	client := &http.Client{}
 	n.logger.Debug(
 		"Sending request to Notion API.",
-		slog.String("URL", request.URL.String()),
+		slog.String("url", request.URL.String()),
 	)
 	response, err := client.Do(request)
-	n.logger.Debug(
-		"Notion API response.",
-		slog.Int("Status Code", response.StatusCode),
-	)
-
 	if err != nil {
 		n.logger.Error(
 			"Error when sending the POST request.",
 			slog.String("error", err.Error()),
-			slog.String("URL", request.URL.String()),
+			slog.String("url", request.URL.String()),
 		)
 		return nil, err
 	}
+	n.logger.Debug(
+		"Notion API response.",
+		slog.Int("status_code", response.StatusCode),
+	)
+
 	notionErr := n.filterAPIError(response)
 	if notionErr != nil {
 		n.logger.Error(
 			"Error response returned by Notion API.",
-			slog.Int("HTTP Status Code", notionErr.Code),
-			slog.Bool("Rate limited", notionErr.IsRateLimited),
-			slog.Bool("Client error", notionErr.IsClientError),
-			slog.Bool("Server error", notionErr.IsServerError),
-			slog.Bool("Response malformed", notionErr.IsMalformed),
+			slog.Int("status_code", notionErr.Code),
+			slog.Bool("rate_limited", notionErr.IsRateLimited),
+			slog.Bool("is_client_error", notionErr.IsClientError),
+			slog.Bool("is_server_error", notionErr.IsServerError),
+			slog.Bool("is_malformed", notionErr.IsMalformed),
 		)
 		return nil, notionErr
 	}
@@ -195,6 +209,7 @@ func (n *Notion) SearchPages(
 	}
 
 	response, err := n.sendRequest(request)
+	defer response.Body.Close()
 	if err != nil {
 		return nil, err
 	}
@@ -244,6 +259,7 @@ func (n *Notion) GetPageBlocks(
 	}
 
 	response, err := n.sendRequest(request)
+	defer response.Body.Close()
 	if err != nil {
 		return nil, err
 	}
@@ -254,7 +270,7 @@ func (n *Notion) GetPageBlocks(
 		n.logger.Error(
 			"Error when unmarshalling Notion Blocks.",
 			slog.String("error", err.Error()),
-			slog.String("URL", request.URL.String()),
+			slog.String("url", request.URL.String()),
 		)
 		return nil, &NotionError{
 			IsRateLimited: false,
@@ -278,19 +294,19 @@ func (n *Notion) filterAPIError(response *http.Response) *NotionError {
 			Code:          response.StatusCode,
 		}
 	}
-	if response.StatusCode >= 400 {
-		return &NotionError{
-			IsRateLimited: false,
-			IsClientError: true,
-			IsServerError: false,
-			Code:          response.StatusCode,
-		}
-	}
 	if response.StatusCode >= 500 {
 		return &NotionError{
 			IsRateLimited: false,
 			IsClientError: false,
 			IsServerError: true,
+			Code:          response.StatusCode,
+		}
+	}
+	if response.StatusCode >= 400 {
+		return &NotionError{
+			IsRateLimited: false,
+			IsClientError: true,
+			IsServerError: false,
 			Code:          response.StatusCode,
 		}
 	}
