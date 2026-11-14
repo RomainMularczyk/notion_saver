@@ -3,7 +3,6 @@ package queue
 import (
 	"fmt"
 	"log"
-	sharedWorker "notion_saver/src/workers/shared"
 
 	amqp "github.com/rabbitmq/amqp091-go"
 )
@@ -202,21 +201,12 @@ func (q *Queue) SetupTopology() {
 	// --------- RETRY TOPOLOGY --------
 	// ---------------------------------
 
-	savesRetry := sharedWorker.NewRetryPolicy(
-		"notion.saves",
-		sharedWorker.DefaultRetryDelays,
-	)
+	savesRetry := NewRetryPolicy("notion.saves", DefaultRetryDelays)
 	savesRetry.Declare(ch)
 
-	pagesRetry := sharedWorker.NewRetryPolicy(
-		"notion.pages",
-		sharedWorker.DefaultRetryDelays,
-	)
+	pagesRetry := NewRetryPolicy("notion.pages", DefaultRetryDelays)
 	pagesRetry.Declare(ch)
 
-	blocksRetry := sharedWorker.NewRetryPolicy(
-		"notion.blocks",
-		sharedWorker.DefaultRetryDelays,
-	)
+	blocksRetry := NewRetryPolicy("notion.blocks", DefaultRetryDelays)
 	blocksRetry.Declare(ch)
 }
