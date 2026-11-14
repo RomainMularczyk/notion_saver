@@ -47,12 +47,12 @@ func PublishNextCursorMessage(
 }
 
 // Publishes a message in the queue with the pages under the next cursor
-func SendPageMessageToDql(
+func SendPageMessageToDlq(
 	ch *amqp.Channel,
 	pageMessage PageMessage,
 	server *utils.Server,
 ) {
-	server.Logger.Info("Sending page message to notion.pages.dql.")
+	server.Logger.Info("Sending page message to notion.pages.dlq.")
 	messageBytes, err := json.Marshal(pageMessage)
 	if err != nil {
 		server.Logger.Error("Error when marshalling JSON.")
@@ -60,8 +60,8 @@ func SendPageMessageToDql(
 	}
 
 	ch.Publish(
-		"notion.pages.dql",
-		"notion.pages.dql",
+		"notion.pages.dlq",
+		"notion.pages.dlq",
 		false, // mandatory
 		false, // immediate
 		amqp.Publishing{
@@ -77,25 +77,21 @@ func GetNextPages(
 	ch *amqp.Channel,
 	pageMessage *PageMessage,
 	server *utils.Server,
-) ([]saverModels.Page, error) {
+) ([]saverModels.Page, *utils.NotionError) {
 	notion := utils.NewNotion(server)
-	nextNotionPages, err := notion.SearchPages(
+	nextNotionPages, notionErr := notion.SearchPages(
 		utils.NotionFilterType("page"),
 		pageMessage.NextCursor,
 	)
-	if err != nil {
-		notionError := notion.IsNotionError(err)
-		if notionError != nil && notionError.IsRateLimited {
-			server.Logger.Error(
-				"Error when retrieving pages from Notion API.",
-				slog.String("error", err.Error()),
-				slog.Bool("rate_limited", notionError.IsRateLimited),
-				slog.Bool("client_error", notionError.IsClientError),
-			)
-			SendPageMessageToDql(ch, *pageMessage, server)
-			return nil, err
-		}
-		return nil, err
+	if notionErr.IsRateLimited {
+		server.Logger.Error(
+			"Error when retrieving pages from Notion API.",
+			slog.String("error", notionErr.Error()),
+			slog.Bool("rate_limited", notionErr.IsRateLimited),
+			slog.Bool("client_error", notionErr.IsClientError),
+		)
+		SendPageMessageToDlq(ch, *pageMessage, server)
+		return nil, notionErr
 	}
 
 	if nextNotionPages.HasMore {

@@ -16,30 +16,29 @@ import (
 func (b *BlockWorker) GetNotionBlocks(
 	ch *amqp.Channel,
 	blockMessage blocksWorkerModels.BlockMessage,
-) ([]saverModels.Block, error) {
+) ([]saverModels.Block, *utils.NotionError) {
 	notion := utils.NewNotion(b.server)
-	notionBlocks, err := notion.GetPageBlocks(
+	notionBlocks, notionErr := notion.GetPageBlocks(
 		blockMessage.PageId,
 		blockMessage.NextCursor,
 	)
-	notionError := notion.IsNotionError(err)
-	if err != nil && notionError.IsRateLimited {
+	if notionErr.IsRateLimited {
 		b.logger.Error(
 			"Error when retrieving blocks from Notion API.",
-			slog.String("error", err.Error()),
-			slog.Bool("rate_limited", notionError.IsRateLimited),
-			slog.Bool("client_error", notionError.IsClientError),
+			slog.String("error", notionErr.Error()),
+			slog.Bool("rate_limited", notionErr.IsRateLimited),
+			slog.Bool("client_error", notionErr.IsClientError),
 		)
-		return nil, err
+		return nil, notionErr
 	}
 
-	if err != nil {
+	if notionErr != nil {
 		b.logger.Error(
 			"Error when retrieving blocks from Notion API.",
-			slog.String("error", err.Error()),
-			slog.String("PageId", blockMessage.PageId.String()),
+			slog.String("error", notionErr.Error()),
+			slog.String("page_id", blockMessage.PageId.String()),
 		)
-		return nil, err
+		return nil, notionErr
 	}
 
 	if notionBlocks.HasMore {
@@ -86,11 +85,11 @@ func (b *BlockWorker) publishNextCursorMessage(
 }
 
 // Publish the block message in the DLQ
-func (b *BlockWorker) SendBlockMessageToDql(
+func (b *BlockWorker) SendBlockMessageToDlq(
 	ch *amqp.Channel,
 	blockMessage blocksWorkerModels.BlockMessage,
 ) {
-	b.logger.Info("Sending block message to DQL.")
+	b.logger.Info("Sending block message to DLQ.")
 	messageBytes, err := json.Marshal(blockMessage)
 	if err != nil {
 		b.logger.Error("Error when marshalling JSON.")
