@@ -4,7 +4,6 @@ import (
 	"fmt"
 	amqp "github.com/rabbitmq/amqp091-go"
 	"log"
-	"log/slog"
 )
 
 type Queue struct {
@@ -18,18 +17,10 @@ func (q *Queue) Connect(
 	password string,
 	port string,
 ) {
-	conn, err := amqp.Dial(
-		fmt.Sprintf("amqp://%s:%s@%s:%s", user, password, host, port),
-	)
+	conn, err := amqp.Dial(fmt.Sprintf("amqp://%s:%s@%s:%s", user, password, host, port))
 
 	if err != nil {
-		slog.Error(
-			fmt.Sprintf(
-				"Could not connect to RabbitMQ: %v",
-				err,
-			),
-		)
-		panic(err)
+		log.Panicln("Could not connect to RabbitMQ.")
 	}
 
 	q.Client = conn
@@ -111,8 +102,9 @@ func (q *Queue) SetupTopology() {
 		false, // no-wait
 		amqp.Table{
 			amqp.QueueTypeArg:           amqp.QueueTypeQuorum,
-			"x-dead-letter-exchange":    "notion.pages.dlq",
+			"x-dead-letter-exchange":    "notion.pages.dlx",
 			"x-dead-letter-routing-key": "notion.pages.dlq",
+			"x-delivery-limit":          int32(6),
 		},
 	)
 	if err != nil {
@@ -139,7 +131,7 @@ func (q *Queue) SetupTopology() {
 		false, // no-wait
 		amqp.Table{
 			amqp.QueueTypeArg:           amqp.QueueTypeQuorum,
-			"x-dead-letter-exchange":    "notion.blocks.dlq",
+			"x-dead-letter-exchange":    "notion.blocks.dlx",
 			"x-dead-letter-routing-key": "notion.blocks.dlq",
 		},
 	)
@@ -173,7 +165,7 @@ func (q *Queue) SetupTopology() {
 
 	err = ch.QueueBind(
 		notionPagesDlq.Name,
-		"notion.pages.dlq",
+		"notion.pages.dlx",
 		"notion.pages.dlq",
 		false, // no-wait
 		nil,
@@ -195,7 +187,7 @@ func (q *Queue) SetupTopology() {
 
 	err = ch.QueueBind(
 		notionBlocksDlq.Name,
-		"notion.blocks.dlq",
+		"notion.blocks.dlx",
 		"notion.blocks.dlq",
 		false, // no-wait
 		nil,
