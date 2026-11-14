@@ -15,7 +15,7 @@ import (
 // to retrieve)
 func (b *BlockWorker) GetNotionBlocks(
 	ch *amqp.Channel,
-	blockMessage blocksWorkerModels.BlockMessage,
+	blockMessage *blocksWorkerModels.BlockMessage,
 ) ([]saverModels.Block, *utils.NotionError) {
 	notion := utils.NewNotion(b.server)
 	notionBlocks, notionErr := notion.GetPageBlocks(
@@ -79,31 +79,6 @@ func (b *BlockWorker) publishNextCursorMessage(
 		amqp.Publishing{
 			ContentType: "application/json",
 			Headers:     amqp.Table{"x-retry-count": blockMessage.RetryCount},
-			Body:        messageBytes,
-		},
-	)
-}
-
-// Publish the block message in the DLQ
-func (b *BlockWorker) SendBlockMessageToDlq(
-	ch *amqp.Channel,
-	blockMessage blocksWorkerModels.BlockMessage,
-) {
-	b.logger.Info("Sending block message to DLQ.")
-	messageBytes, err := json.Marshal(blockMessage)
-	if err != nil {
-		b.logger.Error("Error when marshalling JSON.")
-		return
-	}
-
-	ch.Publish(
-		"notion.blocks.dlq",
-		"notion.blocks.dlq",
-		false, // mandatory
-		false, // immediate
-		amqp.Publishing{
-			ContentType: "application/json",
-			Headers:     amqp.Table{"x-retry-count": blockMessage.RetryCount + 1},
 			Body:        messageBytes,
 		},
 	)

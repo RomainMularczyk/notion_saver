@@ -1,8 +1,8 @@
 package blocksWorker
 
 import (
-	"encoding/json"
 	"log/slog"
+	"notion_saver/src/queue"
 	"notion_saver/src/services"
 	"notion_saver/src/utils"
 	blocksWorkerModels "notion_saver/src/workers/blocks/models"
@@ -20,7 +20,7 @@ func NewBlockWorker(server *utils.Server) *BlockWorker {
 	}
 }
 
-func (b *BlockWorker) Run(server *utils.Server) {
+func (w *BlockWorker) Run(server *utils.Server) {
 	defer server.Queue.Close()
 
 	ch, err := server.Queue.Channel()
@@ -28,7 +28,7 @@ func (b *BlockWorker) Run(server *utils.Server) {
 		panic(err)
 	}
 
-	b.logger.Info("Start consuming messages...")
+	w.logger.Info("Start consuming messages...")
 
 	messages, err := ch.Consume(
 		"notion.blocks",
@@ -40,14 +40,19 @@ func (b *BlockWorker) Run(server *utils.Server) {
 		nil,   // args
 	)
 
+	retryPolicy := queue.NewRetryPolicy("notion.blocks", queue.DefaultRetryDelays)
+
 	var forever chan blocksWorkerModels.BlockMessage
 	go func() {
 		for d := range messages {
-			var blockMessage blocksWorkerModels.BlockMessage
-			err := json.Unmarshal(d.Body, &blockMessage)
+			w.logger.Debug(
+				"Received message from queue.",
+				slog.String("exchange", retryPolicy.ExchangeName()),
+			)
+			blockMsg, err := w.ReadNotionBlocksMessage(d)
 			if err != nil {
-				b.logger.Error(
-					"Error when unmarshalling block message.",
+				w.logger.Error(
+					"Message is not processable. Dropping.",
 					slog.String("error", err.Error()),
 				)
 				ch.Nack(d.DeliveryTag, false, false)
@@ -55,15 +60,31 @@ func (b *BlockWorker) Run(server *utils.Server) {
 			}
 
 			// Publish the next cursor message in the queue
-			newBlocks, notionErr := b.GetNotionBlocks(ch, blockMessage)
-			if notionErr.IsRetryable() {
+			newBlocks, notionErr := w.GetNotionBlocks(ch, blockMsg)
+			switch {
+			case notionErr == nil:
+				blockService := services.NewBlockService(server)
+				blockService.SaveMany(server, newBlocks)
+				ch.Ack(d.DeliveryTag, false)
+			case notionErr.IsRetryable():
+				err := retryPolicy.Schedule(ch, d)
+				// NOTE: if publishing to delay queue fails, we send the message to DLQ
+				if err != nil {
+					w.logger.Info(
+						"Message could not be requeued. Dropping.",
+						slog.String("error", err.Error()),
+					)
+					d.Nack(false, false)
+				} else {
+					w.logger.Info(
+						"Message requeued successfully.",
+						slog.String("queue", retryPolicy.ExchangeName()),
+					)
+					d.Ack(false)
+				}
+			default:
 				d.Nack(false, false)
-				continue
 			}
-
-			blockService := services.NewBlockService(server)
-			blockService.SaveMany(server, newBlocks)
-			ch.Ack(d.DeliveryTag, false)
 		}
 	}()
 	<-forever
