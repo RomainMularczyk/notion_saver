@@ -118,7 +118,7 @@ services:
       - ${LOKI_PORT}:3100
     volumes:
       - ./config/loki/loki.yaml:/etc/loki/loki.yaml:ro
-      - .loki_data:/loki/data
+      - loki_data:/loki/data
     command: ["-config.file=/etc/loki/loki.yaml"]
 
   otel-collector:
