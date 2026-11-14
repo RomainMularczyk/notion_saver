@@ -38,15 +38,15 @@ func (q *Queue) Connect(
 // Setup the RabbitMQ topology
 func (q *Queue) SetupTopology() {
 	ch, err := q.Client.Channel()
-	defer ch.Close()
 	if err != nil {
-		slog.Error(
-			fmt.Sprintf("Could not create channel: %v", err),
-		)
-		panic(err)
+		log.Panicln("Could not create channel.")
 	}
+	defer ch.Close()
 
-	// EXCHANGES
+	// ----------------------------
+	// --------- EXCHANGES --------
+	// ----------------------------
+
 	err = ch.ExchangeDeclare(
 		"notion.pages",
 		"direct",
@@ -61,7 +61,7 @@ func (q *Queue) SetupTopology() {
 	}
 
 	err = ch.ExchangeDeclare(
-		"notion.pages.dlq",
+		"notion.pages.dlx",
 		"direct",
 		true,  // durable
 		false, // delete when unused
@@ -87,7 +87,7 @@ func (q *Queue) SetupTopology() {
 	}
 
 	err = ch.ExchangeDeclare(
-		"notion.blocks.dlq",
+		"notion.blocks.dlx",
 		"direct",
 		true,  // durable
 		false, // delete when unused
@@ -99,7 +99,10 @@ func (q *Queue) SetupTopology() {
 		log.Panicln(err)
 	}
 
-	// QUEUES
+	// -------------------------
+	// --------- QUEUES --------
+	// -------------------------
+
 	notionPagesQueue, err := ch.QueueDeclare(
 		"notion.pages",
 		true,  // durable
@@ -152,6 +155,9 @@ func (q *Queue) SetupTopology() {
 		false, // no-wait
 		amqp.Table{amqp.QueueTypeArg: amqp.QueueTypeQuorum},
 	)
+	if err != nil {
+		log.Panicln(err)
+	}
 
 	// BINDINGS
 	err = ch.QueueBind(
