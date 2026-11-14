@@ -25,7 +25,7 @@ func (b *BlockRepository) CreateMany(
 	blocks []saverModels.Block,
 ) (*[]saverModels.Block, error) {
 	b.logger.Debug(
-		fmt.Sprintf("Attempting to create %v blocks.", len(blocks)),
+		"Attempting to create block.", slog.Int("num_blocks", len(blocks)),
 	)
 
 	result := server.Database.Create(&blocks)
