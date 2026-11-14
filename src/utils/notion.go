@@ -95,11 +95,14 @@ func NewNotion(server *Server) *Notion {
 // Set the headers conforming to the Notion API requirements
 // for more information, refer to https://developers.notion.com/reference/intro
 func (n *Notion) setHeaders(request *http.Request) {
-	errMsg := "Could not find NOTION_API_KEY environment variable."
-	if n.server.Env["NOTION_API_KEY"] == "" ||
-		n.server.Env["NOTION_API_ENDPOINT"] == "" ||
-		n.server.Env["NOTION_API_HEADER_VERSION"] == "" {
-		panic(errMsg)
+	if n.server.Env["NOTION_API_KEY"] == "" {
+		panic("Could not find NOTION_API_KEY environment variable.")
+	}
+	if n.server.Env["NOTION_API_ENDPOINT"] == "" {
+		panic("Could not find NOTION_API_ENDPOINT environment variable.")
+	}
+	if n.server.Env["NOTION_API_HEADER_VERSION"] == "" {
+		panic("Could not find NOTION_API_HEADER_VERSION environment variable.")
 	}
 
 	request.Header.Set("Content-Type", "application/json")

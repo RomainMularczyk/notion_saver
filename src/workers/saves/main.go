@@ -42,7 +42,8 @@ func (w *SaveWorker) Run(server *utils.Server) {
 			saveMsg, err := w.ReadDebeziumSaveMessage(d)
 			if err != nil {
 				w.logger.Error(
-					"An inrecoverable error occurred when handling the message. Dropping the message.",
+					`An inrecoverable error occurred when handling the message. 
+					Dropping the message.`,
 				)
 				d.Nack(false, false)
 			} else {
