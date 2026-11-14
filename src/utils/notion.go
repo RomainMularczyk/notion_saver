@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -34,12 +33,12 @@ type NotionError struct {
 type NotionErrorKind string
 
 const (
-	RateLimitError NotionErrorKind = "rate_limit_error"
-	ClientError    NotionErrorKind = "client_error"
-	ServerError    NotionErrorKind = "server_error"
-	TransportError NotionErrorKind = "transport_error"
-	ParsingError   NotionErrorKind = "parsing_error"
-	RequestError   NotionErrorKind = "request_error"
+	NotionRateLimitError NotionErrorKind = "rate_limit_error"
+	NotionClientError    NotionErrorKind = "client_error"
+	NotionServerError    NotionErrorKind = "server_error"
+	NotionTransportError NotionErrorKind = "transport_error"
+	NotionParsingError   NotionErrorKind = "parsing_error"
+	NotionRequestError   NotionErrorKind = "request_error"
 )
 
 /*
@@ -54,7 +53,7 @@ func (e *NotionError) IsRetryable() bool {
 		return false
 	}
 	switch e.Kind {
-	case RateLimitError, ServerError, TransportError:
+	case NotionRateLimitError, NotionServerError, NotionTransportError:
 		return true
 	default:
 		return false
@@ -171,7 +170,7 @@ func (n *Notion) setRequest(
 		)
 		return nil, &NotionError{
 			Err:  err,
-			Kind: RequestError,
+			Kind: NotionRequestError,
 			Code: 0,
 		}
 	}
@@ -192,13 +191,13 @@ func (n *Notion) sendRequest(request *http.Request) (*http.Response, *NotionErro
 		n.logger.Error(
 			"Error when sending the POST request.",
 			slog.Int("status_code", 0),
-			slog.String("kind", string(RequestError)),
+			slog.String("kind", string(NotionRequestError)),
 			slog.String("url", request.URL.String()),
 			slog.String("error", err.Error()),
 		)
 		return nil, &NotionError{
 			Err:  err,
-			Kind: RequestError,
+			Kind: NotionRequestError,
 			Code: 0,
 		}
 	}
@@ -214,7 +213,6 @@ func (n *Notion) sendRequest(request *http.Request) (*http.Response, *NotionErro
 			"Error response returned by Notion API.",
 			slog.Int("status_code", notionErr.Code),
 			slog.String("kind", string(notionErr.Kind)),
-			slog.String("error", notionErr.Err.Error()),
 		)
 		response.Body.Close()
 		return nil, notionErr
@@ -250,7 +248,7 @@ func (n *Notion) SearchPages(
 		)
 		return nil, &NotionError{
 			Err:  err,
-			Kind: ParsingError,
+			Kind: NotionParsingError,
 			Code: response.StatusCode,
 		}
 	}
@@ -292,7 +290,7 @@ func (n *Notion) GetPageBlocks(
 		)
 		return nil, &NotionError{
 			Err:  err,
-			Kind: ParsingError,
+			Kind: NotionParsingError,
 			Code: response.StatusCode,
 		}
 	}
@@ -304,19 +302,19 @@ func (n *Notion) GetPageBlocks(
 func (n *Notion) filterAPIError(response *http.Response) *NotionError {
 	if response.StatusCode == http.StatusTooManyRequests {
 		return &NotionError{
-			Kind: RateLimitError,
+			Kind: NotionRateLimitError,
 			Code: response.StatusCode,
 		}
 	}
 	if response.StatusCode >= 500 {
 		return &NotionError{
-			Kind: ServerError,
+			Kind: NotionServerError,
 			Code: response.StatusCode,
 		}
 	}
 	if response.StatusCode >= 400 {
 		return &NotionError{
-			Kind: ClientError,
+			Kind: NotionClientError,
 			Code: response.StatusCode,
 		}
 	}

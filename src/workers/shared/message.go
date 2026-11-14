@@ -83,7 +83,7 @@ func GetNextPages(
 		utils.NotionFilterType("page"),
 		pageMessage.NextCursor,
 	)
-	if notionErr.Kind == utils.RateLimitError {
+	if notionErr.Kind == utils.NotionRateLimitError {
 		server.Logger.Error(
 			"Error when retrieving pages from Notion API.",
 			slog.String("error", notionErr.Error()),
