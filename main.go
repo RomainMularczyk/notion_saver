@@ -40,9 +40,10 @@ func main() {
 
 	// Create the server representation
 	server := utils.Server{
-		Logger:  logger,
-		Env:     env,
-		Context: ctx,
+		HTTPClient: utils.NewHTTPClient(),
+		Logger:     logger,
+		Env:        env,
+		Context:    ctx,
 	}
 
 	server.ConnectDatabase()

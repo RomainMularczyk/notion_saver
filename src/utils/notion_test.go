@@ -14,8 +14,9 @@ func TestSearchPages(t *testing.T) {
 	ctx := context.Background()
 
 	server := Server{
-		Env:    env,
-		Logger: NewLogger(ctx),
+		HTTPClient: NewHTTPClient(),
+		Env:        env,
+		Logger:     NewLogger(ctx),
 	}
 
 	notion := NewNotion(&server)
