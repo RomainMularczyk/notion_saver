@@ -59,7 +59,7 @@ func (b *BlockWorker) Run(server *utils.Server) {
 			if notionErr != nil && notionErr.Kind == utils.NotionRateLimitError {
 				b.logger.Error(
 					"Error when retrieving blocks from Notion API.",
-					slog.String("error", err.Error()),
+					slog.String("error", notionErr.Error()),
 					slog.String("kind", string(notionErr.Kind)),
 				)
 				b.SendBlockMessageToDlq(ch, blockMessage)

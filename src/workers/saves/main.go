@@ -55,7 +55,6 @@ func (w *SaveWorker) Run(server *utils.Server) {
 				}
 				notionPages, err := sharedWorker.GetNextPages(ch, &pageMessage, w.server)
 				if err != nil {
-					w.logger.Error("Could not save the pages retrieved from the Notion API.")
 					d.Nack(false, false)
 					continue
 				}

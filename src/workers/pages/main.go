@@ -43,13 +43,13 @@ func (w *PageWorker) Run(server *utils.Server) {
 			pageMsg, err := w.ReadNotionPagesMessage(d)
 			if err != nil {
 				w.logger.Error(
-					"An inrecoverable error occurred when handling the message. Dropping the message.",
+					`An inrecoverable error occurred when handling the message. 
+					Dropping the message.`,
 				)
 				d.Nack(false, false)
 			} else {
-				notionPages, err := sharedWorker.GetNextPages(ch, pageMsg, w.server)
-				if err != nil {
-					w.logger.Error("Could not save the pages retrieved from the Notion API.")
+				notionPages, notionErr := sharedWorker.GetNextPages(ch, pageMsg, w.server)
+				if notionErr != nil {
 					d.Nack(false, false)
 					continue
 				}
