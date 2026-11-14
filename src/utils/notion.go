@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -156,7 +157,7 @@ func (n *Notion) setRequest(
 	method string,
 	url string,
 	body []byte,
-) (*http.Request, error) {
+) (*http.Request, *NotionError) {
 	request, err := http.NewRequest(
 		method,
 		n.endpoint+url,
@@ -165,9 +166,14 @@ func (n *Notion) setRequest(
 	if err != nil {
 		n.logger.Error(
 			"Error when creating the request.",
+			slog.Int("status_code", 0),
 			slog.String("error", err.Error()),
 		)
-		return nil, err
+		return nil, &NotionError{
+			Err:  err,
+			Kind: RequestError,
+			Code: 0,
+		}
 	}
 
 	n.setHeaders(request)
@@ -185,8 +191,10 @@ func (n *Notion) sendRequest(request *http.Request) (*http.Response, *NotionErro
 	if err != nil {
 		n.logger.Error(
 			"Error when sending the POST request.",
-			slog.String("error", err.Error()),
+			slog.Int("status_code", 0),
+			slog.String("kind", string(RequestError)),
 			slog.String("url", request.URL.String()),
+			slog.String("error", err.Error()),
 		)
 		return nil, &NotionError{
 			Err:  err,
@@ -194,9 +202,9 @@ func (n *Notion) sendRequest(request *http.Request) (*http.Response, *NotionErro
 			Code: 0,
 		}
 	}
-	defer response.Body.Close()
 	n.logger.Debug(
 		"Notion API response.",
+		slog.String("url", request.URL.String()),
 		slog.Int("status_code", response.StatusCode),
 	)
 
@@ -205,8 +213,10 @@ func (n *Notion) sendRequest(request *http.Request) (*http.Response, *NotionErro
 		n.logger.Error(
 			"Error response returned by Notion API.",
 			slog.Int("status_code", notionErr.Code),
-			slog.String("kind", string(RequestError)),
+			slog.String("kind", string(notionErr.Kind)),
+			slog.String("error", notionErr.Err.Error()),
 		)
+		response.Body.Close()
 		return nil, notionErr
 	}
 
@@ -218,41 +228,20 @@ func (n *Notion) SearchPages(
 	pageType NotionFilterType,
 	nextCursor *string,
 ) (*notionModels.NotionPages, *NotionError) {
-	request, err := n.setRequest(
-		"POST",
-		"/search",
-		n.filterPages(pageType, nextCursor),
-	)
-	if err != nil {
-		n.logger.Error(
-			"Error when creating a request.",
-			slog.Int("status_code", 0),
-			slog.String("kind", string(RequestError)),
-		)
-		return nil, &NotionError{
-			Err:  err,
-			Kind: RequestError,
-			Code: 0,
-		}
+	pageFilter := n.filterPages(pageType, nextCursor)
+	request, notionErr := n.setRequest("POST", "/search", pageFilter)
+	if notionErr != nil {
+		return nil, notionErr
 	}
 
-	response, err := n.sendRequest(request)
-	if err != nil {
-		n.logger.Error(
-			"Error when sending a request.",
-			slog.Int("status_code", 0),
-			slog.String("kind", string(TransportError)),
-		)
-		return nil, &NotionError{
-			Err:  err,
-			Kind: TransportError,
-			Code: 0,
-		}
+	response, notionErr := n.sendRequest(request)
+	if notionErr != nil {
+		return nil, notionErr
 	}
 	defer response.Body.Close()
 
 	var notionPages notionModels.NotionPages
-	err = json.NewDecoder(response.Body).Decode(&notionPages)
+	err := json.NewDecoder(response.Body).Decode(&notionPages)
 	if err != nil {
 		n.logger.Error(
 			"Error when unmarshalling Notion Pages.",
@@ -282,36 +271,19 @@ func (n *Notion) GetPageBlocks(
 		query.Set("start_cursor", *nextCursor)
 		path += "?" + query.Encode()
 	}
-	request, err := n.setRequest("GET", path, nil)
-	if err != nil {
-		n.logger.Error(
-			"Error when creating a request.",
-			slog.String("error", err.Error()),
-		)
-		return nil, &NotionError{
-			Err:  err,
-			Kind: RequestError,
-			Code: 0,
-		}
+	request, notionErr := n.setRequest("GET", path, nil)
+	if notionErr != nil {
+		return nil, notionErr
 	}
 
-	response, err := n.sendRequest(request)
-	if err != nil {
-		n.logger.Error(
-			"Error when sending the request.",
-			slog.String("error", err.Error()),
-			slog.String("url", request.URL.String()),
-		)
-		return nil, &NotionError{
-			Err:  err,
-			Kind: RequestError,
-			Code: 0,
-		}
+	response, notionErr := n.sendRequest(request)
+	if notionErr != nil {
+		return nil, notionErr
 	}
 	defer response.Body.Close()
 
 	var blocks notionModels.NotionBlocks
-	err = json.NewDecoder(response.Body).Decode(&blocks)
+	err := json.NewDecoder(response.Body).Decode(&blocks)
 	if err != nil {
 		n.logger.Error(
 			"Error when unmarshalling Notion Blocks.",
