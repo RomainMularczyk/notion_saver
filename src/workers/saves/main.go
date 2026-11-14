@@ -38,14 +38,11 @@ func (w *SaveWorker) Run(server *utils.Server) {
 	var forever chan struct{}
 	go func() {
 		for d := range messages {
-			w.logger.Info("Received message from Debezium queue.")
+			w.logger.Debug("Received message from Debezium queue.")
 			saveMsg, err := w.ReadDebeziumSaveMessage(d)
 			if err != nil {
-				w.logger.Error(
-					`An inrecoverable error occurred when handling the message. 
-					Dropping the message.`,
-				)
-				d.Nack(false, false)
+				w.logger.Error("Message is not processable. Dropping.")
+				d.Ack(false)
 			} else {
 				pageMessage := sharedWorker.PageMessage{
 					SaveId:          saveMsg.Payload.After.Id,
@@ -53,14 +50,26 @@ func (w *SaveWorker) Run(server *utils.Server) {
 					NextCursor:      nil,
 					RetryCount:      0,
 				}
-				notionPages, err := sharedWorker.GetNextPages(ch, &pageMessage, w.server)
-				if err != nil {
+				notionPages, notionErr := sharedWorker.GetNextPages(
+					ch,
+					&pageMessage,
+					w.server,
+				)
+				if notionErr.IsRetryable() {
+					w.logger.Error("Message could not be processed. Sending to DLQ.")
 					d.Nack(false, false)
-					continue
+				} else {
+					w.logger.Error("Processing message is not retriable. Dropping.")
+					d.Ack(false)
 				}
+
 				saveService := services.NewPageService(w.server)
-				saveService.SaveMany(w.server, notionPages, saveMsg.Payload.After.Id)
-				w.logger.Info("Message was successfully processed.")
+				saveService.SaveMany(
+					w.server,
+					notionPages,
+					saveMsg.Payload.After.Id,
+				)
+				w.logger.Info("Message was processed successfully.")
 				d.Ack(false)
 			}
 		}
