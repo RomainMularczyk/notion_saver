@@ -35,7 +35,7 @@ func NewRetryPolicy(prefix string, delays []time.Duration) RetryPolicy {
 
 For example, "notion.blocks.retry".
 */
-func (p RetryPolicy) exchangeName() string {
+func (p RetryPolicy) ExchangeName() string {
 	return p.prefix + ".retry"
 }
 
@@ -58,17 +58,23 @@ func (p RetryPolicy) routingKey(attempt int) string {
 }
 
 func RetryCount(d amqp091.Delivery) int {
+	var retryCount int
 	switch count := d.Headers["x-retry-count"].(type) {
 	case int32:
-		return int(count)
+		retryCount = int(count)
 	case int64:
-		return int(count)
+		retryCount = int(count)
 	case float32:
-		return int(count)
+		retryCount = int(count)
 	case float64:
-		return int(count)
+		retryCount = int(count)
 	default:
+		retryCount = 0
+	}
+	if retryCount < 0 {
 		return 0
+	} else {
+		return retryCount
 	}
 }
 
@@ -87,7 +93,7 @@ func (p RetryPolicy) Schedule(
 	d amqp091.Delivery,
 ) error {
 	attempt := p.NextAttempt(d)
-	if attempt >= p.maxAttempts {
+	if attempt > p.maxAttempts {
 		return fmt.Errorf("Max attempt reached.")
 	}
 
@@ -99,7 +105,7 @@ func (p RetryPolicy) Schedule(
 	headers["x-retry-count"] = int32(attempt)
 
 	err := ch.Publish(
-		p.exchangeName(),
+		p.ExchangeName(),
 		p.routingKey(attempt),
 		false,
 		false,
@@ -123,7 +129,7 @@ func (p RetryPolicy) Schedule(
 // Declare both the exchange, the queue and the queue binding to RabbitMQ
 func (p RetryPolicy) Declare(ch *amqp091.Channel) {
 	err := ch.ExchangeDeclare(
-		p.exchangeName(),
+		p.ExchangeName(),
 		"direct",
 		true,  // durable
 		false, // delete when unused
@@ -134,7 +140,7 @@ func (p RetryPolicy) Declare(ch *amqp091.Channel) {
 	if err != nil {
 		log.Panicln(fmt.Sprintf(
 			"Declaring exchange %s failed with error: %w",
-			p.exchangeName(),
+			p.ExchangeName(),
 			err,
 		))
 	}
@@ -151,7 +157,7 @@ func (p RetryPolicy) Declare(ch *amqp091.Channel) {
 			false,
 			amqp091.Table{
 				"x-message-ttl":             int32(delay.Milliseconds()),
-				"x-dead-letter-exchange":    p.prefix,
+				"x-dead-letter-exchange":    p.ExchangeName(),
 				"x-dead-letter-routing-key": p.prefix,
 			},
 		)
@@ -165,7 +171,7 @@ func (p RetryPolicy) Declare(ch *amqp091.Channel) {
 		err = ch.QueueBind(
 			queueName,
 			p.routingKey(attempt),
-			p.exchangeName(),
+			p.ExchangeName(),
 			false,
 			nil,
 		)
@@ -173,7 +179,7 @@ func (p RetryPolicy) Declare(ch *amqp091.Channel) {
 			log.Panicln(fmt.Sprintf(
 				"Could not bind queue %s with exchange %s.",
 				queueName,
-				p.exchangeName(),
+				p.ExchangeName(),
 			))
 		}
 	}
