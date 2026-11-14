@@ -166,8 +166,8 @@ func (q *Queue) SetupTopology() {
 
 	err = ch.QueueBind(
 		notionPagesDlq.Name,
-		"notion.pages.dlx",
 		"notion.pages.dlq",
+		"notion.pages.dlx",
 		false, // no-wait
 		nil,
 	)
@@ -188,8 +188,8 @@ func (q *Queue) SetupTopology() {
 
 	err = ch.QueueBind(
 		notionBlocksDlq.Name,
-		"notion.blocks.dlx",
 		"notion.blocks.dlq",
+		"notion.blocks.dlx",
 		false, // no-wait
 		nil,
 	)
