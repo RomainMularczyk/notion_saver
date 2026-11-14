@@ -83,12 +83,11 @@ func GetNextPages(
 		utils.NotionFilterType("page"),
 		pageMessage.NextCursor,
 	)
-	if notionErr.IsRateLimited {
+	if notionErr.Kind == utils.RateLimitError {
 		server.Logger.Error(
 			"Error when retrieving pages from Notion API.",
 			slog.String("error", notionErr.Error()),
-			slog.Bool("rate_limited", notionErr.IsRateLimited),
-			slog.Bool("client_error", notionErr.IsClientError),
+			slog.String("kind", string(notionErr.Kind)),
 		)
 		SendPageMessageToDlq(ch, *pageMessage, server)
 		return nil, notionErr

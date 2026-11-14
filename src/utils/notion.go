@@ -275,7 +275,7 @@ func (n *Notion) GetPageBlocks(
 	pageId uuid.UUID,
 	nextCursor *string,
 ) (*notionModels.NotionBlocks, *NotionError) {
-	path := "/blocks" + pageId.String() + "/children"
+	path := "/blocks/" + pageId.String() + "/children"
 
 	if nextCursor != nil {
 		query := url.Values{}

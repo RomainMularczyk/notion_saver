@@ -22,7 +22,7 @@ func LoadEnv(path ...string) map[string]string {
 	return map[string]string{
 		"NOTION_API_KEY":            os.Getenv("NOTION_API_KEY"),
 		"NOTION_API_ENDPOINT":       os.Getenv("NOTION_API_ENDPOINT"),
-		"NOTION_API_HEADER_VERSIOn": os.Getenv("NOTION_API_HEADER_VERSION"),
+		"NOTION_API_HEADER_VERSION": os.Getenv("NOTION_API_HEADER_VERSION"),
 		"NOTION_SAVER_RATE_LIMITER": os.Getenv("NOTION_SAVER_RATE_LIMITER"),
 		"RABBITMQ_HOST":             os.Getenv("RABBITMQ_HOST"),
 		"RABBITMQ_USER":             os.Getenv("RABBITMQ_USER"),

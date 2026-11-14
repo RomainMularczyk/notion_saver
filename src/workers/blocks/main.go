@@ -56,12 +56,11 @@ func (b *BlockWorker) Run(server *utils.Server) {
 
 			// Publish the next cursor message in the queue
 			newBlocks, notionErr := b.GetNotionBlocks(ch, blockMessage)
-			if notionErr.IsRateLimited {
+			if notionErr.Kind == utils.RateLimitError {
 				b.logger.Error(
 					"Error when retrieving blocks from Notion API.",
 					slog.String("error", err.Error()),
-					slog.Bool("rate_limited", notionErr.IsRateLimited),
-					slog.Bool("client_error", notionErr.IsClientError),
+					slog.String("kind", string(notionErr.Kind)),
 				)
 				b.SendBlockMessageToDlq(ch, blockMessage)
 				ch.Nack(d.DeliveryTag, false, false)

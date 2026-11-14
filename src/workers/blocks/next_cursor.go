@@ -22,12 +22,11 @@ func (b *BlockWorker) GetNotionBlocks(
 		blockMessage.PageId,
 		blockMessage.NextCursor,
 	)
-	if notionErr.IsRateLimited {
+	if notionErr.Kind == utils.RateLimitError {
 		b.logger.Error(
 			"Error when retrieving blocks from Notion API.",
 			slog.String("error", notionErr.Error()),
-			slog.Bool("rate_limited", notionErr.IsRateLimited),
-			slog.Bool("client_error", notionErr.IsClientError),
+			slog.String("kind", string(notionErr.Kind)),
 		)
 		return nil, notionErr
 	}
