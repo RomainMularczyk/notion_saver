@@ -2,8 +2,10 @@ package queue
 
 import (
 	"fmt"
-	amqp "github.com/rabbitmq/amqp091-go"
 	"log"
+	sharedWorker "notion_saver/src/workers/shared"
+
+	amqp "github.com/rabbitmq/amqp091-go"
 )
 
 type Queue struct {
@@ -195,4 +197,26 @@ func (q *Queue) SetupTopology() {
 	if err != nil {
 		log.Panicln(err)
 	}
+
+	// ---------------------------------
+	// --------- RETRY TOPOLOGY --------
+	// ---------------------------------
+
+	savesRetry := sharedWorker.NewRetryPolicy(
+		"notion.saves",
+		sharedWorker.DefaultRetryDelays,
+	)
+	savesRetry.Declare(ch)
+
+	pagesRetry := sharedWorker.NewRetryPolicy(
+		"notion.pages",
+		sharedWorker.DefaultRetryDelays,
+	)
+	pagesRetry.Declare(ch)
+
+	blocksRetry := sharedWorker.NewRetryPolicy(
+		"notion.blocks",
+		sharedWorker.DefaultRetryDelays,
+	)
+	blocksRetry.Declare(ch)
 }

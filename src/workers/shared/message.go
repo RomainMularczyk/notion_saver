@@ -83,12 +83,7 @@ func GetNextPages(
 		utils.NotionFilterType("page"),
 		pageMessage.NextCursor,
 	)
-	if notionErr.IsRetryable() {
-		server.Logger.Error(
-			"Error when retrieving pages from Notion API.",
-			slog.String("kind", string(notionErr.Kind)),
-		)
-		SendPageMessageToDlq(ch, *pageMessage, server)
+	if notionErr != nil {
 		return nil, notionErr
 	}
 

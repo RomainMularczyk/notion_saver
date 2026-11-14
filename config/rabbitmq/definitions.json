@@ -6,36 +6,6 @@
             "durable": true,
             "auto_delete": false,
             "arguments": {}
-        },
-        {
-            "name": "queue.delay.5",
-            "vhost": "/",
-            "durable": true,
-            "auto_delete": false,
-            "arguments": {
-                "x-dead-letter-exchange": "dlx.delay.10",
-                "x-message-ttl": 5000
-            }
-        },
-        {
-            "name": "queue.delay.10",
-            "vhost": "/",
-            "durable": true,
-            "auto_delete": false,
-            "arguments": {
-                "x-dead-letter-exchange": "dlx.delay.10",
-                "x-message-ttl": 10000
-            }
-        },
-        {
-            "name": "queue.delay.15",
-            "vhost": "/",
-            "durable": true,
-            "auto_delete": false,
-            "arguments": {
-                "x-dead-letter-exchange": "dlx.delay.10",
-                "x-message-ttl": 15000
-            }
         }
     ],
     "exchanges": [
@@ -43,33 +13,6 @@
             "name": "debezium",
             "type": "direct",
             "vhost": "/",
-            "durable": true,
-            "auto_delete": false,
-            "internal": false,
-            "arguments": {}
-        },
-        {
-            "name": "dlx.delay.5",
-            "vhost": "/",
-            "type": "topic",
-            "durable": true,
-            "auto_delete": false,
-            "internal": false,
-            "arguments": {}
-        },
-        {
-            "name": "dlx.delay.10",
-            "vhost": "/",
-            "type": "topic",
-            "durable": true,
-            "auto_delete": false,
-            "internal": false,
-            "arguments": {}
-        },
-        {
-            "name": "dlx.delay.15",
-            "vhost": "/",
-            "type": "topic",
             "durable": true,
             "auto_delete": false,
             "internal": false,

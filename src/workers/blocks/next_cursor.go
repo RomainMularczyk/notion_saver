@@ -26,6 +26,7 @@ func (b *BlockWorker) GetNotionBlocks(
 		b.logger.Error(
 			"Error when retrieving blocks from Notion API.",
 			slog.String("error", notionErr.Error()),
+			slog.Int("status_code", notionErr.Code),
 			slog.String("kind", string(notionErr.Kind)),
 		)
 		return nil, notionErr

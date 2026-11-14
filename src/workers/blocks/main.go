@@ -57,13 +57,7 @@ func (b *BlockWorker) Run(server *utils.Server) {
 			// Publish the next cursor message in the queue
 			newBlocks, notionErr := b.GetNotionBlocks(ch, blockMessage)
 			if notionErr.IsRetryable() {
-				b.logger.Error(
-					"Error when retrieving blocks from Notion API.",
-					slog.String("error", notionErr.Error()),
-					slog.String("kind", string(notionErr.Kind)),
-				)
-				b.SendBlockMessageToDlq(ch, blockMessage)
-				ch.Nack(d.DeliveryTag, false, false)
+				d.Nack(false, false)
 				continue
 			}
 
