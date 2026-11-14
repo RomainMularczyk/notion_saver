@@ -25,14 +25,21 @@ func (t NotionFilterType) Valid() bool {
 }
 
 type NotionError struct {
-	Code          int
-	IsRateLimited bool
-	IsClientError bool
-	IsServerError bool
-	IsTransport   bool
-	IsMalformed   bool
-	IsRequest     bool
+	Code int
+	Kind NotionErrorKind
+	Err  error
 }
+
+type NotionErrorKind string
+
+const (
+	RateLimitError NotionErrorKind = "rate_limit_error"
+	ClientError    NotionErrorKind = "client_error"
+	ServerError    NotionErrorKind = "server_error"
+	TransportError NotionErrorKind = "transport_error"
+	ParsingError   NotionErrorKind = "parsing_error"
+	RequestError   NotionErrorKind = "request_error"
+)
 
 /*
 	Check whether the NotionError is retryable or not.
@@ -42,29 +49,46 @@ the request is considered as not retryable and the message should be discarded
 right away.
 */
 func (e *NotionError) IsRetryable() bool {
-	return e.IsRateLimited || e.IsServerError || e.IsTransport
+	if e == nil {
+		return false
+	}
+	switch e.Kind {
+	case RateLimitError, ServerError, TransportError:
+		return true
+	default:
+		return false
+	}
 }
 
-func (e NotionError) Error() string {
-	return fmt.Sprintf(
-		"An error occurred when retrieving data from Notion API. Code: %v",
-		e.Code,
-	)
+// Return the original error
+func (e *NotionError) Unwrap() error {
+	return e.Err
+}
+
+// Print the error message
+func (e *NotionError) Error() string {
+	if e == nil {
+		return "Notion API error: <nil>"
+	}
+	if e.Err != nil {
+		return fmt.Sprintf("Notion API error (code=%d): %v", e.Code, e.Err)
+	}
+	return fmt.Sprintf("Notion API error (code=%d)", e.Code)
 }
 
 type Notion struct {
 	server        *Server
 	logger        *slog.Logger
-	Endpoint      string
-	HeaderVersion string
+	endpoint      string
+	headerVersion string
 }
 
 func NewNotion(server *Server) *Notion {
 	return &Notion{
 		server:        server,
 		logger:        server.Logger.With("module", "utils/notion"),
-		Endpoint:      server.Env["NOTION_API_ENDPOINT"],
-		HeaderVersion: server.Env["NOTION_API_HEADER_VERSION"],
+		endpoint:      server.Env["NOTION_API_ENDPOINT"],
+		headerVersion: server.Env["NOTION_API_HEADER_VERSION"],
 	}
 }
 
@@ -79,7 +103,7 @@ func (n *Notion) setHeaders(request *http.Request) {
 	}
 
 	request.Header.Set("Content-Type", "application/json")
-	request.Header.Set("Notion-Version", n.HeaderVersion)
+	request.Header.Set("Notion-Version", n.headerVersion)
 	request.Header.Set("Authorization", fmt.Sprintf("Bearer %s", n.server.Env["NOTION_API_KEY"]))
 }
 
@@ -135,7 +159,7 @@ func (n *Notion) setRequest(
 ) (*http.Request, error) {
 	request, err := http.NewRequest(
 		method,
-		n.Endpoint+url,
+		n.endpoint+url,
 		bytes.NewBuffer(body),
 	)
 	if err != nil {
@@ -165,13 +189,9 @@ func (n *Notion) sendRequest(request *http.Request) (*http.Response, *NotionErro
 			slog.String("url", request.URL.String()),
 		)
 		return nil, &NotionError{
-			IsClientError: false,
-			IsRateLimited: false,
-			IsTransport:   false,
-			IsServerError: false,
-			IsRequest:     true,
-			IsMalformed:   false,
-			Code:          404,
+			Err:  err,
+			Kind: RequestError,
+			Code: 0,
 		}
 	}
 	defer response.Body.Close()
@@ -185,10 +205,7 @@ func (n *Notion) sendRequest(request *http.Request) (*http.Response, *NotionErro
 		n.logger.Error(
 			"Error response returned by Notion API.",
 			slog.Int("status_code", notionErr.Code),
-			slog.Bool("rate_limited", notionErr.IsRateLimited),
-			slog.Bool("is_client_error", notionErr.IsClientError),
-			slog.Bool("is_server_error", notionErr.IsServerError),
-			slog.Bool("is_malformed", notionErr.IsMalformed),
+			slog.String("kind", string(RequestError)),
 		)
 		return nil, notionErr
 	}
@@ -209,29 +226,27 @@ func (n *Notion) SearchPages(
 	if err != nil {
 		n.logger.Error(
 			"Error when creating a request.",
-			slog.String("error", err.Error()),
+			slog.Int("status_code", 0),
+			slog.String("kind", string(RequestError)),
 		)
 		return nil, &NotionError{
-			IsRateLimited: false,
-			IsClientError: false,
-			IsServerError: false,
-			IsMalformed:   false,
-			IsTransport:   false,
-			IsRequest:     true,
-			Code:          404,
+			Err:  err,
+			Kind: RequestError,
+			Code: 0,
 		}
 	}
 
 	response, err := n.sendRequest(request)
 	if err != nil {
+		n.logger.Error(
+			"Error when sending a request.",
+			slog.Int("status_code", 0),
+			slog.String("kind", string(TransportError)),
+		)
 		return nil, &NotionError{
-			IsRateLimited: false,
-			IsClientError: false,
-			IsServerError: false,
-			IsTransport:   true,
-			IsMalformed:   false,
-			IsRequest:     false,
-			Code:          0,
+			Err:  err,
+			Kind: TransportError,
+			Code: 0,
 		}
 	}
 	defer response.Body.Close()
@@ -245,13 +260,9 @@ func (n *Notion) SearchPages(
 			slog.String("url", request.URL.String()),
 		)
 		return nil, &NotionError{
-			IsRateLimited: false,
-			IsClientError: false,
-			IsServerError: false,
-			IsMalformed:   true,
-			IsTransport:   false,
-			IsRequest:     false,
-			Code:          response.StatusCode,
+			Err:  err,
+			Kind: ParsingError,
+			Code: response.StatusCode,
 		}
 	}
 	n.logger.Info("Notion API responded successfully.")
@@ -278,13 +289,9 @@ func (n *Notion) GetPageBlocks(
 			slog.String("error", err.Error()),
 		)
 		return nil, &NotionError{
-			IsRateLimited: false,
-			IsClientError: false,
-			IsServerError: false,
-			IsTransport:   false,
-			IsMalformed:   false,
-			IsRequest:     true,
-			Code:          0,
+			Err:  err,
+			Kind: RequestError,
+			Code: 0,
 		}
 	}
 
@@ -296,13 +303,9 @@ func (n *Notion) GetPageBlocks(
 			slog.String("url", request.URL.String()),
 		)
 		return nil, &NotionError{
-			IsRateLimited: false,
-			IsClientError: false,
-			IsServerError: false,
-			IsTransport:   true,
-			IsMalformed:   false,
-			IsRequest:     false,
-			Code:          0,
+			Err:  err,
+			Kind: RequestError,
+			Code: 0,
 		}
 	}
 	defer response.Body.Close()
@@ -316,13 +319,9 @@ func (n *Notion) GetPageBlocks(
 			slog.String("url", request.URL.String()),
 		)
 		return nil, &NotionError{
-			IsRateLimited: false,
-			IsClientError: false,
-			IsServerError: false,
-			IsTransport:   false,
-			IsMalformed:   true,
-			IsRequest:     false,
-			Code:          response.StatusCode,
+			Err:  err,
+			Kind: ParsingError,
+			Code: response.StatusCode,
 		}
 	}
 
@@ -331,37 +330,22 @@ func (n *Notion) GetPageBlocks(
 
 // Filter Notion API errors to enable retry behaviors
 func (n *Notion) filterAPIError(response *http.Response) *NotionError {
-	if response.StatusCode == 429 {
+	if response.StatusCode == http.StatusTooManyRequests {
 		return &NotionError{
-			IsRateLimited: true,
-			IsClientError: false,
-			IsServerError: false,
-			IsTransport:   false,
-			IsMalformed:   false,
-			IsRequest:     false,
-			Code:          response.StatusCode,
+			Kind: RateLimitError,
+			Code: response.StatusCode,
 		}
 	}
 	if response.StatusCode >= 500 {
 		return &NotionError{
-			IsRateLimited: false,
-			IsClientError: false,
-			IsServerError: true,
-			IsTransport:   false,
-			IsMalformed:   false,
-			IsRequest:     false,
-			Code:          response.StatusCode,
+			Kind: ServerError,
+			Code: response.StatusCode,
 		}
 	}
 	if response.StatusCode >= 400 {
 		return &NotionError{
-			IsRateLimited: false,
-			IsClientError: true,
-			IsServerError: false,
-			IsTransport:   false,
-			IsMalformed:   false,
-			IsRequest:     false,
-			Code:          response.StatusCode,
+			Kind: ClientError,
+			Code: response.StatusCode,
 		}
 	}
 	return nil
