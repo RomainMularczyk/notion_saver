@@ -2,7 +2,9 @@ package utils
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -54,7 +56,8 @@ func (e *NotionError) IsRetryable() bool {
 	}
 	switch e.Kind {
 	case NotionRateLimitError, NotionServerError, NotionTransportError:
-		return true
+		// NOTE: this is required
+		return !errors.Is(e.Err, context.Canceled)
 	default:
 		return false
 	}
@@ -194,13 +197,13 @@ func (n *Notion) sendRequest(request *http.Request) (*http.Response, *NotionErro
 		n.logger.Error(
 			"Error when sending the POST request.",
 			slog.Int("status_code", 0),
-			slog.String("kind", string(NotionRequestError)),
+			slog.String("kind", string(NotionTransportError)),
 			slog.String("url", request.URL.String()),
 			slog.String("error", err.Error()),
 		)
 		return nil, &NotionError{
 			Err:  err,
-			Kind: NotionRequestError,
+			Kind: NotionTransportError,
 			Code: 0,
 		}
 	}

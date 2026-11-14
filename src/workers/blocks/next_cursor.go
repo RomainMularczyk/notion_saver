@@ -22,7 +22,7 @@ func (b *BlockWorker) GetNotionBlocks(
 		blockMessage.PageId,
 		blockMessage.NextCursor,
 	)
-	if notionErr != nil && notionErr.Kind == utils.NotionRateLimitError {
+	if notionErr.IsRetryable() {
 		b.logger.Error(
 			"Error when retrieving blocks from Notion API.",
 			slog.String("error", notionErr.Error()),
