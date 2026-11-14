@@ -153,12 +153,11 @@ func (n *Notion) setRequest(
 
 // Send the HTTP request to Notion API
 func (n *Notion) sendRequest(request *http.Request) (*http.Response, *NotionError) {
-	client := &http.Client{}
 	n.logger.Debug(
 		"Sending request to Notion API.",
 		slog.String("url", request.URL.String()),
 	)
-	response, err := client.Do(request)
+	response, err := n.server.HTTPClient.Do(request)
 	if err != nil {
 		n.logger.Error(
 			"Error when sending the POST request.",
@@ -175,6 +174,7 @@ func (n *Notion) sendRequest(request *http.Request) (*http.Response, *NotionErro
 			Code:          404,
 		}
 	}
+	defer response.Body.Close()
 	n.logger.Debug(
 		"Notion API response.",
 		slog.Int("status_code", response.StatusCode),
