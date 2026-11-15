@@ -52,31 +52,3 @@ func (w *PageWorker) PublishBlockMessage(
 		},
 	)
 }
-
-// Publish the page message in the DLQ
-func (w *PageWorker) SendPageMessageToDlq(
-	ch *amqp.Channel,
-	pageMessage *sharedWorker.PageMessage,
-) {
-	w.logger.Info(
-		"Publishing page message to notion.pages.dlq.",
-		slog.String("page_id", pageMessage.SaveId.String()),
-	)
-	messageBytes, err := json.Marshal(pageMessage)
-	if err != nil {
-		w.logger.Error("Error when marshalling JSON.")
-		return
-	}
-
-	ch.Publish(
-		"notion.pages.dlq",
-		"notion.pages.dlq",
-		false, // mandatory
-		false, // immediate
-		amqp.Publishing{
-			ContentType: "application/json",
-			Headers:     amqp.Table{"x-retry-count": pageMessage.RetryCount},
-			Body:        messageBytes,
-		},
-	)
-}
