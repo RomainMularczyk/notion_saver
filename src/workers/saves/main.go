@@ -48,7 +48,6 @@ func (w *SaveWorker) Run(server *utils.Server) {
 					SaveId:          saveMsg.Payload.After.Id,
 					PaginationIndex: 0,
 					NextCursor:      nil,
-					RetryCount:      0,
 				}
 				notionPages, notionErr := sharedWorker.GetNextPages(
 					ch,

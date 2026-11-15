@@ -14,7 +14,6 @@ type PageMessage struct {
 	SaveId          uuid.UUID `json:"save_id"`
 	PaginationIndex int       `json:"pagination_index"`
 	NextCursor      *string   `json:"next_cursor"`
-	RetryCount      int       `json:"retry_count"`
 }
 
 // Publishes a message in the queue with the pages under the next cursor
@@ -41,7 +40,6 @@ func PublishNextCursorMessage(
 		amqp.Publishing{
 			ContentType: "application/json",
 			Body:        messageBytes,
-			Headers:     amqp.Table{"x-retry-count": pageMessage.RetryCount},
 		},
 	)
 }
@@ -66,7 +64,6 @@ func GetNextPages(
 			NextCursor:      &nextNotionPages.NextCursor,
 			SaveId:          pageMessage.SaveId,
 			PaginationIndex: pageMessage.PaginationIndex + 1,
-			RetryCount:      0,
 		}
 		PublishNextCursorMessage(ch, nextPageMessage, server)
 	}
