@@ -5,7 +5,7 @@ import (
 	"log"
 	"time"
 
-	"github.com/rabbitmq/amqp091-go"
+	amqp "github.com/rabbitmq/amqp091-go"
 )
 
 type RetryPolicy struct {
@@ -57,7 +57,7 @@ func (p RetryPolicy) routingKey(attempt int) string {
 	return fmt.Sprintf("retry.%d", attempt)
 }
 
-func RetryCount(d amqp091.Delivery) int {
+func RetryCount(d amqp.Delivery) int {
 	var retryCount int
 	switch count := d.Headers["x-retry-count"].(type) {
 	case int32:
@@ -78,7 +78,7 @@ func RetryCount(d amqp091.Delivery) int {
 	}
 }
 
-func (p RetryPolicy) NextAttempt(d amqp091.Delivery) int {
+func (p RetryPolicy) NextAttempt(d amqp.Delivery) int {
 	next := RetryCount(d) + 1
 	return next
 }
@@ -89,8 +89,8 @@ func (p RetryPolicy) NextAttempt(d amqp091.Delivery) int {
 number of attempts value.
 */
 func (p RetryPolicy) Schedule(
-	ch *amqp091.Channel,
-	d amqp091.Delivery,
+	ch *amqp.Channel,
+	d amqp.Delivery,
 ) error {
 	attempt := p.NextAttempt(d)
 	if attempt > p.maxAttempts {
@@ -98,7 +98,7 @@ func (p RetryPolicy) Schedule(
 	}
 
 	// NOTE: we need to copy headers to preserve OTel trace correlation headers
-	headers := make(amqp091.Table, len(d.Headers)+1)
+	headers := make(amqp.Table, len(d.Headers)+1)
 	for k, v := range d.Headers {
 		headers[k] = v
 	}
@@ -109,9 +109,9 @@ func (p RetryPolicy) Schedule(
 		p.routingKey(attempt),
 		false,
 		false,
-		amqp091.Publishing{
+		amqp.Publishing{
 			ContentType:  "application/json",
-			DeliveryMode: amqp091.Persistent,
+			DeliveryMode: amqp.Persistent,
 			Headers:      headers,
 			Body:         d.Body,
 		},
@@ -127,7 +127,7 @@ func (p RetryPolicy) Schedule(
 }
 
 // Declare both the exchange, the queue and the queue binding to RabbitMQ
-func (p RetryPolicy) Declare(ch *amqp091.Channel) {
+func (p RetryPolicy) Declare(ch *amqp.Channel) {
 	err := ch.ExchangeDeclare(
 		p.ExchangeName(),
 		"direct",
@@ -155,9 +155,9 @@ func (p RetryPolicy) Declare(ch *amqp091.Channel) {
 			false,
 			false,
 			false,
-			amqp091.Table{
+			amqp.Table{
 				"x-message-ttl":             int32(delay.Milliseconds()),
-				"x-dead-letter-exchange":    p.ExchangeName(),
+				"x-dead-letter-exchange":    p.prefix,
 				"x-dead-letter-routing-key": p.prefix,
 			},
 		)
