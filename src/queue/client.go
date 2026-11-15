@@ -134,6 +134,7 @@ func (q *Queue) SetupTopology() {
 			amqp.QueueTypeArg:           amqp.QueueTypeQuorum,
 			"x-dead-letter-exchange":    "notion.blocks.dlx",
 			"x-dead-letter-routing-key": "notion.blocks.dlq",
+			"x-delivery-limit":          int32(6),
 		},
 	)
 	if err != nil {
