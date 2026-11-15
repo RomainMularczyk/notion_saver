@@ -70,7 +70,7 @@ func (w *BlockWorker) Run(server *utils.Server) {
 				err := retryPolicy.Schedule(ch, d)
 				// NOTE: if publishing to delay queue fails, we send the message to DLQ
 				if err != nil {
-					w.logger.Info(
+					w.logger.Error(
 						"Message could not be requeued. Dropping.",
 						slog.String("error", err.Error()),
 					)
